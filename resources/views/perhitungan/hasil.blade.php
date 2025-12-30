@@ -4,6 +4,16 @@
 @section('page-title', 'Hasil Akhir dan Perankingan')
 
 @section('content')
+<!-- Tombol Export CSV -->
+<div class="mb-3">
+    <a href="{{ route('hasil.export.csv') }}" class="btn btn-success">
+        <i class="bi bi-file-earmark-spreadsheet"></i> Export ke CSV
+    </a>
+    <small class="text-muted ms-2">
+        <i class="bi bi-info-circle"></i> Export hasil perankingan untuk pelaporan
+    </small>
+</div>
+
 <!-- Tabel Hasil Perhitungan -->
 <div class="card">
     <div class="card-header">

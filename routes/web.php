@@ -45,4 +45,5 @@ Route::middleware(['auth'])->group(function () {
     // Perhitungan dan Hasil
     Route::get('perhitungan', [PerhitunganController::class, 'index'])->name('perhitungan.index');
     Route::get('hasil', [PerhitunganController::class, 'hasil'])->name('hasil.index');
+    Route::get('hasil/export-csv', [PerhitunganController::class, 'exportCsv'])->name('hasil.export.csv');
 });

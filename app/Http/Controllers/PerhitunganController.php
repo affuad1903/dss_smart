@@ -225,4 +225,103 @@ class PerhitunganController extends Controller
         
         return $ranking;
     }
+
+    /**
+     * Export hasil perankingan ke format CSV
+     */
+    public function exportCsv()
+    {
+        $alternatif = Alternatif::get();
+        $kriteria = Kriteria::get();
+        $penilaian = Penilaian::all();
+
+        // Hitung nilai utilitas
+        $nilaiEkstrem = $this->getNilaiEkstrem($kriteria, $penilaian);
+        $nilaiUtilitas = $this->getNilaiUtilitas($alternatif, $kriteria, $penilaian, $nilaiEkstrem);
+
+        // Hitung nilai preferensi dan ranking
+        $nilaiPreferensi = $this->getNilaiPreferensi($alternatif, $kriteria, $nilaiUtilitas);
+        $ranking = $this->getRanking($nilaiPreferensi);
+
+        // Nama file dengan timestamp
+        $filename = 'hasil_perankingan_' . date('Y-m-d_His') . '.csv';
+
+        // Header untuk download
+        $headers = [
+            'Content-Type' => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0'
+        ];
+
+        // Callback untuk generate CSV
+        $callback = function() use ($ranking, $kriteria, $nilaiPreferensi) {
+            $file = fopen('php://output', 'w');
+            
+            // BOM untuk UTF-8
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            // Header CSV
+            $header = ['Ranking', 'Kode', 'Nama Bank Sampah'];
+            foreach ($kriteria as $krit) {
+                $header[] = $krit->nama . ' (' . $krit->kode . ')';
+            }
+            $header[] = 'Nilai Preferensi (V)';
+            $header[] = 'Status';
+            
+            fputcsv($file, $header);
+
+            // Data ranking
+            foreach ($ranking as $item) {
+                $row = [
+                    $item['rank'],
+                    $item['alternatif']->kode,
+                    $item['alternatif']->nama
+                ];
+
+                // Cari utilitas untuk alternatif ini
+                $altUtilitas = collect($nilaiPreferensi)->firstWhere('alternatif.id', $item['alternatif']->id);
+                
+                // Tambahkan nilai utilitas x bobot untuk setiap kriteria
+                foreach ($kriteria as $krit) {
+                    $utilitas = $altUtilitas['utilitas'][$krit->kode];
+                    $bobotUtilitas = $utilitas * $krit->bobot;
+                    $row[] = number_format($bobotUtilitas, 4);
+                }
+
+                // Nilai preferensi
+                $row[] = number_format($item['nilai_v'], 4);
+
+                // Status
+                if ($item['rank'] == 1) {
+                    $row[] = 'PRIORITAS UTAMA';
+                } elseif ($item['rank'] <= 3) {
+                    $row[] = 'Prioritas Tinggi';
+                } else {
+                    $row[] = 'Prioritas Rendah';
+                }
+
+                fputcsv($file, $row);
+            }
+
+            // Tambahkan informasi tambahan
+            fputcsv($file, []);
+            fputcsv($file, ['INFORMASI PERHITUNGAN']);
+            fputcsv($file, ['Metode', 'SMART (Simple Multi Attribute Rating Technique)']);
+            fputcsv($file, ['Tanggal Export', date('d-m-Y H:i:s')]);
+            fputcsv($file, ['Jumlah Alternatif', count($ranking)]);
+            fputcsv($file, ['Jumlah Kriteria', $kriteria->count()]);
+            
+            fputcsv($file, []);
+            fputcsv($file, ['BOBOT KRITERIA']);
+            foreach ($kriteria as $krit) {
+                fputcsv($file, [$krit->kode, $krit->nama, $krit->bobot, $krit->tipe]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 }
