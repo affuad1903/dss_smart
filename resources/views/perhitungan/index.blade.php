@@ -4,6 +4,25 @@
 @section('page-title', 'Perhitungan Metode SMART')
 
 @section('content')
+<!-- Info Alternatif Terpilih -->
+<div class="alert alert-info">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <strong><i class="bi bi-info-circle"></i> Alternatif yang Dihitung:</strong>
+            <span class="badge bg-primary ms-2">{{ $alternatif->count() }} Alternatif Terpilih</span>
+            <br>
+            <small class="text-muted">
+                @foreach($alternatif as $alt)
+                    {{ $alt->kode }}{{ !$loop->last ? ', ' : '' }}
+                @endforeach
+            </small>
+        </div>
+        <a href="{{ route('perhitungan.index') }}" class="btn btn-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Ubah Pilihan
+        </a>
+    </div>
+</div>
+
 <!-- 1. Tabel Penilaian (Nilai Parameter) -->
 <div class="card">
     <div class="card-header">
@@ -160,9 +179,14 @@
                     Lihat hasil akhir perhitungan dan perankingan Bank Sampah
                 </p>
             </div>
-            <a href="{{ route('hasil.index') }}" class="btn btn-primary">
-                <i class="bi bi-trophy"></i> Lihat Hasil Akhir
-            </a>
+            <form action="{{ route('hasil.index') }}" method="GET" class="d-inline">
+                @foreach($alternatifIds as $id)
+                <input type="hidden" name="alternatif_ids[]" value="{{ $id }}">
+                @endforeach
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-trophy"></i> Lihat Hasil Akhir
+                </button>
+            </form>
         </div>
     </div>
 </div>

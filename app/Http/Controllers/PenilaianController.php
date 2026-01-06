@@ -14,11 +14,11 @@ use Illuminate\Http\Request;
 class PenilaianController extends Controller
 {
     /**
-     * Tampilkan form penilaian
+     * Tampilkan halaman checklist alternatif
      */
     public function index()
     {
-        $alternatif = Alternatif::get();
+        $alternatif = Alternatif::all();
         $kriteria = Kriteria::with('parameters')->get();
         
         // Ambil data penilaian yang sudah ada
@@ -28,12 +28,17 @@ class PenilaianController extends Controller
         $dataPenilaian = [];
         foreach ($alternatif as $alt) {
             $row = ['alternatif' => $alt];
+            $allFilled = true;
             foreach ($kriteria as $krit) {
                 $nilai = $penilaian->where('alternatif_id', $alt->id)
                     ->where('kriteria_id', $krit->id)
                     ->first();
                 $row[$krit->kode] = $nilai;
+                if (!$nilai) {
+                    $allFilled = false;
+                }
             }
+            $row['all_filled'] = $allFilled;
             $dataPenilaian[] = $row;
         }
 
@@ -41,64 +46,71 @@ class PenilaianController extends Controller
     }
 
     /**
-     * Tampilkan form input nilai untuk alternatif dan kriteria tertentu
+     * Tampilkan form input batch untuk alternatif yang dipilih
      */
     public function create(Request $request)
     {
-        $alternatif = Alternatif::findOrFail($request->alternatif_id);
-        $kriteria = Kriteria::with('parameters')->findOrFail($request->kriteria_id);
-        
-        // Cek apakah sudah ada penilaian
-        $penilaian = Penilaian::where('alternatif_id', $alternatif->id)
-            ->where('kriteria_id', $kriteria->id)
-            ->first();
+        // Jika tidak ada alternatif_ids dari checklist, redirect ke index
+        if (!$request->has('alternatif_ids') || empty($request->alternatif_ids)) {
+            return redirect()->route('penilaian.index')
+                ->with('error', 'Silakan pilih alternatif terlebih dahulu');
+        }
 
-        return view('penilaian.create', compact('alternatif', 'kriteria', 'penilaian'));
+        $alternatifIds = $request->alternatif_ids;
+        $alternatif = Alternatif::whereIn('id', $alternatifIds)->get();
+        $kriteria = Kriteria::with('parameters')->orderBy('kode')->get();
+        
+        // Ambil penilaian yang sudah ada
+        $existingPenilaian = Penilaian::whereIn('alternatif_id', $alternatifIds)->get();
+
+        return view('penilaian.create', compact('alternatif', 'kriteria', 'existingPenilaian'));
     }
 
     /**
-     * Simpan atau update penilaian
+     * Simpan atau update penilaian batch
      */
     public function store(Request $request)
     {
-        // Ambil kriteria untuk cek tipe validasi
-        $kriteria = Kriteria::with('parameters')->findOrFail($request->kriteria_id);
-        
-        // Validasi berbeda untuk kriteria C2 (kategorikal) dan kriteria lainnya (numerikal)
-        if ($kriteria->kode == 'C2') {
-            // Kriteria C2: Aksesibilitas Transportasi (kategorikal)
-            $request->validate([
-                'alternatif_id' => 'required|exists:alternatif,id',
-                'kriteria_id' => 'required|exists:kriteria,id',
-                'nilai_aktual' => 'required|string',
-                'nilai_parameter_manual' => 'required|integer|min:1|max:5',
-            ]);
-        } else {
-            // Kriteria C1, C3, C4: Numerikal
-            $request->validate([
-                'alternatif_id' => 'required|exists:alternatif,id',
-                'kriteria_id' => 'required|exists:kriteria,id',
-                'nilai_aktual' => 'required|numeric',
-            ]);
-        }
-        
-        // Tentukan nilai parameter berdasarkan nilai aktual
-        $nilaiParameter = $this->getNilaiParameter($kriteria, $request->nilai_aktual, $request->nilai_parameter_manual);
+        // Validasi data
+        $request->validate([
+            'penilaian' => 'required|array',
+            'penilaian.*.alternatif_id' => 'required|exists:alternatif,id',
+            'penilaian.*.kriteria_id' => 'required|exists:kriteria,id',
+            'penilaian.*.nilai_aktual' => 'required',
+        ]);
 
-        // Simpan atau update penilaian
-        Penilaian::updateOrCreate(
-            [
-                'alternatif_id' => $request->alternatif_id,
-                'kriteria_id' => $request->kriteria_id,
-            ],
-            [
-                'nilai_aktual' => $request->nilai_aktual,
-                'nilai_parameter' => $nilaiParameter,
-            ]
-        );
+        $kriteria = Kriteria::with('parameters')->get()->keyBy('id');
+        $successCount = 0;
+
+        foreach ($request->penilaian as $data) {
+            $kriteriaItem = $kriteria->get($data['kriteria_id']);
+            
+            // Tentukan nilai parameter
+            if ($kriteriaItem->kode == 'C2') {
+                // Kategorikal - ambil dari input manual
+                $nilaiParameter = $data['nilai_parameter'] ?? 1;
+            } else {
+                // Numerikal - hitung dari range
+                $nilaiParameter = $this->getNilaiParameter($kriteriaItem, $data['nilai_aktual']);
+            }
+
+            // Simpan atau update penilaian
+            Penilaian::updateOrCreate(
+                [
+                    'alternatif_id' => $data['alternatif_id'],
+                    'kriteria_id' => $data['kriteria_id'],
+                ],
+                [
+                    'nilai_aktual' => $data['nilai_aktual'],
+                    'nilai_parameter' => $nilaiParameter,
+                ]
+            );
+            
+            $successCount++;
+        }
 
         return redirect()->route('penilaian.index')
-            ->with('success', 'Penilaian berhasil disimpan');
+            ->with('success', "Berhasil menyimpan $successCount penilaian");
     }
 
     /**
@@ -106,7 +118,7 @@ class PenilaianController extends Controller
      */
     private function getNilaiParameter($kriteria, $nilaiAktual, $nilaiManual = null)
     {
-        // Jika kriteria C2 (kategorikal), gunakan nilai manual
+        // Jika kriteria C2 (kategorikal), gunakan nilai manual jika ada
         if ($kriteria->kode == 'C2' && $nilaiManual) {
             return $nilaiManual;
         }

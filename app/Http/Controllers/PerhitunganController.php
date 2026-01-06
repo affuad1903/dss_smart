@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Alternatif;
 use App\Models\Kriteria;
 use App\Models\Penilaian;
+use App\Models\HasilPerhitungan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * Controller untuk Perhitungan dan Hasil Akhir Metode SMART
@@ -15,16 +17,28 @@ class PerhitunganController extends Controller
     /**
      * Tampilkan halaman perhitungan
      */
-    public function index()
+    public function index(Request $request)
     {
-        $alternatif = Alternatif::get();
+        // Ambil semua alternatif untuk checklist
+        $semuaAlternatif = Alternatif::get();
         $kriteria = Kriteria::get();
-        $penilaian = Penilaian::all();
+        
+        // Cek apakah ada alternatif yang dipilih
+        $alternatifIds = $request->input('alternatif_ids', []);
+        
+        // Jika tidak ada yang dipilih, tampilkan halaman checklist
+        if (empty($alternatifIds)) {
+            return view('perhitungan.checklist', compact('semuaAlternatif', 'kriteria'));
+        }
+        
+        // Filter alternatif berdasarkan yang dipilih
+        $alternatif = Alternatif::whereIn('id', $alternatifIds)->get();
+        $penilaian = Penilaian::whereIn('alternatif_id', $alternatifIds)->get();
 
         // 1. TABEL PENILAIAN (Nilai Parameter)
         $tabelPenilaian = $this->getTabelPenilaian($alternatif, $kriteria, $penilaian);
 
-        // 2. NILAI EKSTREM (Min-Max per kriteria)
+        // 2. NILAI EKSTREM (Min-Max per kriteria) - hanya dari alternatif terpilih
         $nilaiEkstrem = $this->getNilaiEkstrem($kriteria, $penilaian);
 
         // 3. NILAI UTILITAS (Normalisasi)
@@ -35,18 +49,32 @@ class PerhitunganController extends Controller
             'kriteria',
             'tabelPenilaian',
             'nilaiEkstrem',
-            'nilaiUtilitas'
+            'nilaiUtilitas',
+            'alternatifIds'
         ));
     }
 
     /**
      * Tampilkan halaman hasil akhir dan perankingan
      */
-    public function hasil()
+    public function hasil(Request $request)
     {
-        $alternatif = Alternatif::get();
+        // Ambil alternatif yang dipilih dari session atau request
+        $alternatifIds = $request->input('alternatif_ids', session('alternatif_ids', []));
+        
+        // Jika tidak ada yang dipilih, redirect ke halaman checklist
+        if (empty($alternatifIds)) {
+            return redirect()->route('perhitungan.index')
+                ->with('error', 'Silakan pilih alternatif terlebih dahulu');
+        }
+        
+        // Simpan ke session untuk digunakan di export dan simpan history
+        session(['alternatif_ids' => $alternatifIds]);
+        
+        // Filter alternatif berdasarkan yang dipilih
+        $alternatif = Alternatif::whereIn('id', $alternatifIds)->get();
         $kriteria = Kriteria::get();
-        $penilaian = Penilaian::all();
+        $penilaian = Penilaian::whereIn('alternatif_id', $alternatifIds)->get();
 
         // Hitung nilai utilitas
         $nilaiEkstrem = $this->getNilaiEkstrem($kriteria, $penilaian);
@@ -63,7 +91,8 @@ class PerhitunganController extends Controller
             'kriteria',
             'nilaiUtilitas',
             'nilaiPreferensi',
-            'ranking'
+            'ranking',
+            'alternatifIds'
         ));
     }
 
@@ -231,9 +260,17 @@ class PerhitunganController extends Controller
      */
     public function exportCsv()
     {
-        $alternatif = Alternatif::get();
+        // Ambil alternatif yang dipilih dari session
+        $alternatifIds = session('alternatif_ids', []);
+        
+        if (empty($alternatifIds)) {
+            return redirect()->route('perhitungan.index')
+                ->with('error', 'Silakan pilih alternatif terlebih dahulu');
+        }
+        
+        $alternatif = Alternatif::whereIn('id', $alternatifIds)->get();
         $kriteria = Kriteria::get();
-        $penilaian = Penilaian::all();
+        $penilaian = Penilaian::whereIn('alternatif_id', $alternatifIds)->get();
 
         // Hitung nilai utilitas
         $nilaiEkstrem = $this->getNilaiEkstrem($kriteria, $penilaian);
@@ -323,5 +360,94 @@ class PerhitunganController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Simpan hasil perhitungan ke history
+     */
+    public function simpanHistory(Request $request)
+    {
+        $request->validate([
+            'judul' => 'required|string|max:255',
+            'keterangan' => 'nullable|string|max:1000',
+        ]);
+
+        // Ambil alternatif yang dipilih dari session
+        $alternatifIds = session('alternatif_ids', []);
+        
+        if (empty($alternatifIds)) {
+            return back()->with('error', 'Silakan pilih alternatif terlebih dahulu');
+        }
+
+        $alternatif = Alternatif::whereIn('id', $alternatifIds)->get();
+        $kriteria = Kriteria::get();
+        $penilaian = Penilaian::whereIn('alternatif_id', $alternatifIds)->get();
+
+        // Validasi: Pastikan semua alternatif sudah dinilai
+        $totalPenilaianRequired = $alternatif->count() * $kriteria->count();
+        if ($penilaian->count() < $totalPenilaianRequired) {
+            return back()->with('error', 'Tidak dapat menyimpan history. Pastikan semua alternatif sudah dinilai untuk semua kriteria!');
+        }
+
+        // Validasi: Pastikan total bobot = 1
+        $totalBobot = $kriteria->sum('bobot');
+        if (abs($totalBobot - 1) >= 0.01) {
+            return back()->with('error', 'Tidak dapat menyimpan history. Total bobot kriteria harus sama dengan 1! Saat ini: ' . $totalBobot);
+        }
+
+        // Hitung semua hasil
+        $nilaiEkstrem = $this->getNilaiEkstrem($kriteria, $penilaian);
+        $nilaiUtilitas = $this->getNilaiUtilitas($alternatif, $kriteria, $penilaian, $nilaiEkstrem);
+        $nilaiPreferensi = $this->getNilaiPreferensi($alternatif, $kriteria, $nilaiUtilitas);
+        $ranking = $this->getRanking($nilaiPreferensi);
+
+        // Simpan ke database
+        HasilPerhitungan::create([
+            'judul' => $request->judul,
+            'keterangan' => $request->keterangan,
+            'data_alternatif' => $alternatif->toArray(),
+            'data_kriteria' => $kriteria->toArray(),
+            'data_penilaian' => $penilaian->toArray(),
+            'hasil_normalisasi' => $nilaiEkstrem,
+            'hasil_utility' => $nilaiUtilitas,
+            'hasil_akhir' => $ranking,
+            'total_bobot_kriteria' => $totalBobot,
+            'jumlah_alternatif' => $alternatif->count(),
+            'jumlah_kriteria' => $kriteria->count(),
+            'user_name' => Auth::user()->name ?? 'System',
+        ]);
+
+        return redirect()->route('history.index')
+            ->with('success', 'History perhitungan berhasil disimpan!');
+    }
+
+    /**
+     * Tampilkan daftar history perhitungan
+     */
+    public function history()
+    {
+        $history = HasilPerhitungan::orderBy('created_at', 'desc')->paginate(10);
+        return view('perhitungan.history', compact('history'));
+    }
+
+    /**
+     * Tampilkan detail history perhitungan
+     */
+    public function showHistory($id)
+    {
+        $hasil = HasilPerhitungan::findOrFail($id);
+        return view('perhitungan.detail-history', compact('hasil'));
+    }
+
+    /**
+     * Hapus history perhitungan
+     */
+    public function deleteHistory($id)
+    {
+        $hasil = HasilPerhitungan::findOrFail($id);
+        $hasil->delete();
+
+        return redirect()->route('history.index')
+            ->with('success', 'History perhitungan berhasil dihapus!');
     }
 }

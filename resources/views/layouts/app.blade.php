@@ -133,6 +133,9 @@
             <a class="nav-link {{ request()->routeIs('hasil.*') ? 'active' : '' }}" href="{{ route('hasil.index') }}">
                 <i class="bi bi-trophy"></i> Hasil Akhir
             </a>
+            <a class="nav-link {{ request()->routeIs('history.*') ? 'active' : '' }}" href="{{ route('history.index') }}">
+                <i class="bi bi-clock-history"></i> History Perhitungan
+            </a>
             
             <hr style="border-color: rgba(255,255,255,0.2); margin: 20px 15px;">
             
@@ -195,6 +198,7 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
+    @stack('scripts')
     @yield('scripts')
 </body>
 </html>

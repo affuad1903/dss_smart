@@ -1,5 +1,41 @@
 # Catatan Kode Penting - SPK SMART
 
+## Update Terbaru (6 Jan 2026)
+
+### Flow Penilaian Batch dengan Checklist
+- **Halaman Index Penilaian** (`resources/views/penilaian/index.blade.php`):
+  - Checklist untuk memilih alternatif yang akan dinilai
+  - Status kelengkapan penilaian per alternatif
+  - Modal detail untuk melihat penilaian yang sudah ada
+  
+- **Halaman Input Batch** (`resources/views/penilaian/create.blade.php`):
+  - Input semua kriteria untuk semua alternatif terpilih dalam satu halaman
+  - Keterangan detail range parameter di setiap input
+  - Save batch untuk efisiensi
+
+- **Controller** (`app/Http/Controllers/PenilaianController.php`):
+  - Method `create()` menerima multiple `alternatif_ids[]` dari checklist
+  - Method `store()` menyimpan batch penilaian sekaligus
+
+### Flow Perhitungan dengan Checklist Alternatif
+- **Halaman Checklist** (`resources/views/perhitungan/checklist.blade.php`):
+  - Pilih alternatif yang akan dihitung
+  - Hanya alternatif dengan penilaian lengkap yang dapat dipilih
+  - Progress bar kelengkapan penilaian
+  
+- **Perhitungan Controller** (`app/Http/Controllers/PerhitunganController.php`):
+  - Method `index()` menerima `alternatif_ids[]` dari checklist
+  - Jika tidak ada alternatif dipilih, tampilkan halaman checklist
+  - Filter alternatif dan penilaian berdasarkan yang dipilih
+  - Simpan `alternatif_ids` ke session untuk digunakan di hasil, export, dan history
+  
+- **Flow Lengkap**:
+  1. `/perhitungan` → Tampilkan checklist alternatif
+  2. Pilih alternatif → `/perhitungan?alternatif_ids[]=1&alternatif_ids[]=2`
+  3. Tampilkan proses perhitungan (nilai ekstrem, utilitas)
+  4. `/hasil?alternatif_ids[]=1&alternatif_ids[]=2` → Tampilkan hasil dan ranking
+  5. Export CSV dan Simpan History menggunakan alternatif dari session
+
 ## Struktur Project
 
 ```

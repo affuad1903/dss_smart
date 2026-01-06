@@ -4,13 +4,58 @@
 @section('page-title', 'Hasil Akhir dan Perankingan')
 
 @section('content')
-<!-- Tombol Export CSV -->
-<div class="mb-3">
+<!-- Info Alternatif Terpilih -->
+<div class="alert alert-success">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <strong><i class="bi bi-check-circle"></i> Hasil Perhitungan untuk:</strong>
+            <span class="badge bg-success ms-2">{{ $alternatif->count() }} Alternatif</span>
+            <br>
+            <small class="text-white">
+                @foreach($alternatif as $alt)
+                    <span class="badge bg-light text-dark me-1">{{ $alt->kode }}</span>
+                @endforeach
+            </small>
+        </div>
+        <form action="{{ route('perhitungan.index') }}" method="GET" class="d-inline">
+            @foreach($alternatifIds as $id)
+            <input type="hidden" name="alternatif_ids[]" value="{{ $id }}">
+            @endforeach
+            <button type="submit" class="btn btn-light btn-sm">
+                <i class="bi bi-arrow-left"></i> Lihat Proses Perhitungan
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Notifikasi -->
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <i class="bi bi-check-circle-fill"></i> {{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
+@if(session('error'))
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    <i class="bi bi-x-circle-fill"></i> {{ session('error') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
+<!-- Tombol Aksi -->
+<div class="mb-3 d-flex gap-2 flex-wrap">
     <a href="{{ route('hasil.export.csv') }}" class="btn btn-success">
         <i class="bi bi-file-earmark-spreadsheet"></i> Export ke CSV
     </a>
-    <small class="text-muted ms-2">
-        <i class="bi bi-info-circle"></i> Export hasil perankingan untuk pelaporan
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#simpanHistoryModal">
+        <i class="bi bi-save"></i> Simpan ke History
+    </button>
+    <a href="{{ route('history.index') }}" class="btn btn-info">
+        <i class="bi bi-clock-history"></i> Lihat History
+    </a>
+    <small class="text-muted align-self-center ms-2">
+        <i class="bi bi-info-circle"></i> Simpan hasil perhitungan untuk dokumentasi
     </small>
 </div>
 
@@ -134,6 +179,38 @@
     </div>
 </div>
 
+<!-- Grafik Visualisasi -->
+@if($ranking && count($ranking) > 0)
+<div class="card mt-3">
+    <div class="card-header">
+        <i class="bi bi-bar-chart-fill"></i> Grafik Visualisasi Perankingan
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- Grafik Bar Chart -->
+            <div class="col-md-12 mb-4">
+                <h6 class="text-primary">Perbandingan Nilai Preferensi</h6>
+                <canvas id="chartNilaiPreferensi" height="80"></canvas>
+            </div>
+        </div>
+        
+        <div class="row mt-4">
+            <!-- Grafik Radar Chart -->
+            <div class="col-md-6">
+                <h6 class="text-primary">Perbandingan Top 5 Alternatif</h6>
+                <canvas id="chartRadar"></canvas>
+            </div>
+            
+            <!-- Grafik Pie Chart -->
+            <div class="col-md-6">
+                <h6 class="text-primary">Distribusi Nilai Preferensi</h6>
+                <canvas id="chartPie"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 <!-- Kesimpulan -->
 <div class="card mt-3">
     <div class="card-header bg-success text-white">
@@ -210,4 +287,234 @@
         </p>
     </div>
 </div>
+
+<!-- Modal Simpan History -->
+<div class="modal fade" id="simpanHistoryModal" tabindex="-1" aria-labelledby="simpanHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="simpanHistoryModalLabel">
+                    <i class="bi bi-save"></i> Simpan ke History Perhitungan
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ route('history.store') }}" method="POST">
+                @csrf
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="judul" class="form-label">Judul Perhitungan <span class="text-danger">*</span></label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="judul" 
+                               name="judul" 
+                               placeholder="Contoh: Perhitungan Periode Januari 2026"
+                               value="Perhitungan {{ date('d F Y H:i') }}"
+                               required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="keterangan" class="form-label">Keterangan</label>
+                        <textarea class="form-control" 
+                                  id="keterangan" 
+                                  name="keterangan" 
+                                  rows="3"
+                                  placeholder="Tambahkan catatan atau keterangan tentang perhitungan ini (opsional)"></textarea>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <small>History akan menyimpan snapshot data saat ini termasuk alternatif, kriteria, penilaian, dan hasil perhitungan.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Simpan
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+@if($ranking && count($ranking) > 0)
+<script>
+// Data untuk grafik
+const labels = {!! json_encode(array_map(function($item) { 
+    return $item['alternatif']->kode . ' - ' . (strlen($item['alternatif']->nama) > 20 ? substr($item['alternatif']->nama, 0, 20) . '...' : $item['alternatif']->nama); 
+}, $ranking)) !!};
+
+const nilaiPreferensi = {!! json_encode(array_map(function($item) { 
+    return $item['nilai_v']; 
+}, $ranking)) !!};
+
+// Warna gradient untuk bar chart
+const colors = nilaiPreferensi.map((value, index) => {
+    if (index === 0) return 'rgba(255, 193, 7, 0.8)'; // Gold untuk rank 1
+    if (index === 1) return 'rgba(192, 192, 192, 0.8)'; // Silver untuk rank 2
+    if (index === 2) return 'rgba(205, 127, 50, 0.8)'; // Bronze untuk rank 3
+    return 'rgba(75, 192, 192, 0.8)'; // Teal untuk lainnya
+});
+
+const borderColors = colors.map(color => color.replace('0.8', '1'));
+
+// 1. Bar Chart - Nilai Preferensi
+const ctxBar = document.getElementById('chartNilaiPreferensi').getContext('2d');
+new Chart(ctxBar, {
+    type: 'bar',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Nilai Preferensi (V)',
+            data: nilaiPreferensi,
+            backgroundColor: colors,
+            borderColor: borderColors,
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+            },
+            title: {
+                display: true,
+                text: 'Ranking Bank Sampah Berdasarkan Nilai Preferensi',
+                font: {
+                    size: 16,
+                    weight: 'bold'
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return 'Nilai V: ' + context.parsed.y.toFixed(4);
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                max: 1,
+                title: {
+                    display: true,
+                    text: 'Nilai Preferensi (V)'
+                },
+                ticks: {
+                    callback: function(value) {
+                        return value.toFixed(2);
+                    }
+                }
+            },
+            x: {
+                title: {
+                    display: true,
+                    text: 'Alternatif Bank Sampah'
+                }
+            }
+        }
+    }
+});
+
+// Data untuk top 5 alternatif
+const top5Labels = labels.slice(0, Math.min(5, labels.length));
+const top5Data = nilaiPreferensi.slice(0, Math.min(5, nilaiPreferensi.length));
+
+// 2. Radar Chart - Top 5 Alternatif
+const ctxRadar = document.getElementById('chartRadar').getContext('2d');
+new Chart(ctxRadar, {
+    type: 'radar',
+    data: {
+        labels: top5Labels,
+        datasets: [{
+            label: 'Nilai Preferensi Top 5',
+            data: top5Data,
+            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 2,
+            pointBackgroundColor: 'rgba(54, 162, 235, 1)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgba(54, 162, 235, 1)'
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+            }
+        },
+        scales: {
+            r: {
+                beginAtZero: true,
+                max: 1,
+                ticks: {
+                    stepSize: 0.2,
+                    callback: function(value) {
+                        return value.toFixed(1);
+                    }
+                }
+            }
+        }
+    }
+});
+
+// 3. Pie Chart - Distribusi Nilai
+const ctxPie = document.getElementById('chartPie').getContext('2d');
+new Chart(ctxPie, {
+    type: 'pie',
+    data: {
+        labels: top5Labels,
+        datasets: [{
+            data: top5Data,
+            backgroundColor: [
+                'rgba(255, 193, 7, 0.8)',
+                'rgba(192, 192, 192, 0.8)',
+                'rgba(205, 127, 50, 0.8)',
+                'rgba(75, 192, 192, 0.8)',
+                'rgba(153, 102, 255, 0.8)'
+            ],
+            borderColor: [
+                'rgba(255, 193, 7, 1)',
+                'rgba(192, 192, 192, 1)',
+                'rgba(205, 127, 50, 1)',
+                'rgba(75, 192, 192, 1)',
+                'rgba(153, 102, 255, 1)'
+            ],
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'right',
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((context.parsed / total) * 100).toFixed(2);
+                        return context.label + ': ' + context.parsed.toFixed(4) + ' (' + percentage + '%)';
+                    }
+                }
+            }
+        }
+    }
+});
+</script>
+@endif
+@endpush
+
 @endsection

@@ -30,8 +30,11 @@ Route::middleware(['auth'])->group(function () {
     
     // Data Kriteria
     Route::get('kriteria', [KriteriaController::class, 'index'])->name('kriteria.index');
+    Route::get('kriteria/create', [KriteriaController::class, 'create'])->name('kriteria.create');
+    Route::post('kriteria', [KriteriaController::class, 'store'])->name('kriteria.store');
     Route::get('kriteria/{kriteria}/edit', [KriteriaController::class, 'edit'])->name('kriteria.edit');
     Route::put('kriteria/{kriteria}', [KriteriaController::class, 'update'])->name('kriteria.update');
+    Route::delete('kriteria/{kriteria}', [KriteriaController::class, 'destroy'])->name('kriteria.destroy');
     
     // Parameter Kriteria
     Route::resource('parameter', ParameterKriteriaController::class);
@@ -46,4 +49,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('perhitungan', [PerhitunganController::class, 'index'])->name('perhitungan.index');
     Route::get('hasil', [PerhitunganController::class, 'hasil'])->name('hasil.index');
     Route::get('hasil/export-csv', [PerhitunganController::class, 'exportCsv'])->name('hasil.export.csv');
+    
+    // History Perhitungan
+    Route::get('history', [PerhitunganController::class, 'history'])->name('history.index');
+    Route::post('history/store', [PerhitunganController::class, 'simpanHistory'])->name('history.store');
+    Route::get('history/{id}', [PerhitunganController::class, 'showHistory'])->name('history.show');
+    Route::delete('history/{id}', [PerhitunganController::class, 'deleteHistory'])->name('history.delete');
 });

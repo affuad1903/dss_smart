@@ -1,37 +1,47 @@
 @extends('layouts.app')
 
-@section('title', 'Edit Kriteria - SPK SMART')
-@section('page-title', 'Edit Bobot Kriteria')
+@section('title', 'Tambah Kriteria - SPK SMART')
+@section('page-title', 'Tambah Kriteria Baru')
 
 @section('content')
 <div class="row">
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
-                <i class="bi bi-pencil"></i> Form Edit Bobot Kriteria
+                <i class="bi bi-plus-circle"></i> Form Tambah Kriteria
             </div>
             <div class="card-body">
-                <form action="{{ route('kriteria.update', $kriteria->id) }}" method="POST">
+                <form action="{{ route('kriteria.store') }}" method="POST">
                     @csrf
-                    @method('PUT')
                     
                     <div class="mb-3">
-                        <label for="kode" class="form-label">Kode Kriteria</label>
+                        <label for="kode" class="form-label">Kode Kriteria <span class="text-danger">*</span></label>
                         <input type="text" 
-                               class="form-control" 
+                               class="form-control @error('kode') is-invalid @enderror" 
                                id="kode" 
-                               value="{{ $kriteria->kode }}" 
-                               disabled>
+                               name="kode"
+                               value="{{ old('kode') }}"
+                               placeholder="Contoh: C5, C6, dst"
+                               required>
+                        <small class="text-muted">Kode unik untuk kriteria (tidak boleh sama dengan kriteria lain)</small>
+                        @error('kode')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
                     </div>
                     
                     <div class="mb-3">
-                        <label for="nama" class="form-label">Nama Kriteria</label>
+                        <label for="nama" class="form-label">Nama Kriteria <span class="text-danger">*</span></label>
                         <input type="text" 
-                               class="form-control" 
+                               class="form-control @error('nama') is-invalid @enderror" 
                                id="nama" 
-                               value="{{ $kriteria->nama }}" 
-                               disabled>
-                        <small class="text-muted">Nama kriteria tidak dapat diubah</small>
+                               name="nama"
+                               value="{{ old('nama') }}"
+                               placeholder="Contoh: Tingkat Kebersihan"
+                               required>
+                        <small class="text-muted">Nama deskriptif untuk kriteria penilaian</small>
+                        @error('nama')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
                     </div>
                     
                     <div class="mb-3">
@@ -40,10 +50,11 @@
                                 id="tipe" 
                                 name="tipe" 
                                 required>
-                            <option value="benefit" {{ old('tipe', $kriteria->tipe ?? 'benefit') == 'benefit' ? 'selected' : '' }}>
+                            <option value="">-- Pilih Tipe --</option>
+                            <option value="benefit" {{ old('tipe') == 'benefit' ? 'selected' : '' }}>
                                 Benefit (Semakin besar semakin baik)
                             </option>
-                            <option value="cost" {{ old('tipe', $kriteria->tipe ?? 'benefit') == 'cost' ? 'selected' : '' }}>
+                            <option value="cost" {{ old('tipe') == 'cost' ? 'selected' : '' }}>
                                 Cost (Semakin kecil semakin baik)
                             </option>
                         </select>
@@ -59,12 +70,16 @@
                                class="form-control @error('bobot') is-invalid @enderror" 
                                id="bobot" 
                                name="bobot" 
-                               value="{{ old('bobot', $kriteria->bobot) }}"
+                               value="{{ old('bobot', number_format($sisaBobot, 2, '.', '')) }}"
                                step="0.01"
                                min="0"
                                max="1"
                                required>
-                        <small class="text-muted">Masukkan nilai antara 0 dan 1 (contoh: 0.4 untuk 40%)</small>
+                        <small class="text-muted">
+                            Masukkan nilai antara 0 dan 1 (contoh: 0.1 untuk 10%)
+                            <br>
+                            <strong>Sisa bobot yang tersedia: {{ number_format($sisaBobot, 2) }}</strong>
+                        </small>
                         @error('bobot')
                         <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
@@ -75,7 +90,7 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <span>
                                 <i class="bi bi-calculator"></i>
-                                <strong>Total Bobot Setelah Update:</strong>
+                                <strong>Total Bobot Setelah Penambahan:</strong>
                             </span>
                             <span id="totalBobotValue" class="badge fs-6"></span>
                         </div>
@@ -84,13 +99,14 @@
                     
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i>
-                        <strong>Info:</strong> Anda dapat menyimpan bobot dengan total ≠ 1, namun sistem akan memberikan peringatan. 
-                        Pastikan total bobot = 1 sebelum melakukan perhitungan SMART.
+                        <strong>Info:</strong> Total bobot saat ini: <strong>{{ number_format($totalBobotExisting, 2) }}</strong>. 
+                        Anda dapat menambahkan kriteria dengan bobot apapun, namun pastikan total bobot semua kriteria = 1 
+                        sebelum melakukan perhitungan SMART.
                     </div>
                     
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-save"></i> Update
+                            <i class="bi bi-save"></i> Simpan
                         </button>
                         <a href="{{ route('kriteria.index') }}" class="btn btn-secondary">
                             <i class="bi bi-arrow-left"></i> Kembali
@@ -106,16 +122,38 @@
             <div class="card-body">
                 <h6 class="text-primary"><i class="bi bi-info-circle"></i> Panduan</h6>
                 <p class="text-muted small">
-                    Bobot menunjukkan tingkat kepentingan kriteria dalam penilaian. 
-                    Nilai bobot harus antara 0 dan 1.
+                    Kriteria adalah faktor yang digunakan dalam penilaian. 
+                    Setiap kriteria memiliki bobot yang menunjukkan tingkat kepentingannya.
                 </p>
-                <p class="text-muted small mb-0">
-                    <strong>Contoh:</strong><br>
-                    0.4 = 40%<br>
-                    0.3 = 30%<br>
-                    0.2 = 20%<br>
-                    0.1 = 10%
-                </p>
+                
+                <h6 class="text-primary mt-3">Tipe Kriteria:</h6>
+                <ul class="text-muted small">
+                    <li><strong>Benefit:</strong> Nilai besar = lebih baik<br>
+                        <small>Contoh: Volume sampah, kepadatan penduduk</small>
+                    </li>
+                    <li><strong>Cost:</strong> Nilai kecil = lebih baik<br>
+                        <small>Contoh: Jarak ke TPA, biaya operasional</small>
+                    </li>
+                </ul>
+                
+                <h6 class="text-primary mt-3">Contoh Bobot:</h6>
+                <ul class="text-muted small mb-0">
+                    <li>0.1 = 10% (kepentingan rendah)</li>
+                    <li>0.2 = 20% (kepentingan sedang)</li>
+                    <li>0.3 = 30% (kepentingan tinggi)</li>
+                    <li>0.4 = 40% (kepentingan sangat tinggi)</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h6 class="text-warning"><i class="bi bi-exclamation-triangle"></i> Perhatian</h6>
+                <ul class="text-muted small mb-0">
+                    <li>Kode kriteria harus <strong>unik</strong></li>
+                    <li>Total bobot semua kriteria harus <strong>= 1</strong></li>
+                    <li>Setelah menambah kriteria, Anda perlu menambahkan <strong>parameter kriteria</strong> untuk setiap kriteria</li>
+                </ul>
             </div>
         </div>
     </div>
@@ -129,15 +167,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const totalBobotValue = document.getElementById('totalBobotValue');
     const totalBobotMessage = document.getElementById('totalBobotMessage');
     
-    // Data bobot kriteria lain (dari PHP)
-    const currentKriteriaId = {{ $kriteria->id }};
-    const currentBobot = {{ $kriteria->bobot }};
-    const otherBobotSum = {{ $otherBobotSum }};
+    // Data bobot kriteria yang sudah ada (dari PHP)
+    const totalBobotExisting = {{ $totalBobotExisting }};
     
     // Fungsi untuk menghitung dan menampilkan total bobot
     function updateTotalBobot() {
         const newBobot = parseFloat(bobotInput.value) || 0;
-        const totalBobot = otherBobotSum + newBobot;
+        const totalBobot = totalBobotExisting + newBobot;
         const totalBobotRounded = Math.round(totalBobot * 100) / 100;
         
         // Tampilkan info box
@@ -155,12 +191,12 @@ document.addEventListener('DOMContentLoaded', function() {
             totalBobotInfo.className = 'alert alert-warning';
             totalBobotValue.className = 'badge bg-warning text-dark fs-6';
             const selisih = (totalBobotRounded - 1.00).toFixed(2);
-            totalBobotMessage.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Total bobot melebihi 1 sebesar ' + selisih + '. Kurangi ' + (selisih * 100) + '% dari bobot kriteria.';
+            totalBobotMessage.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Total bobot melebihi 1 sebesar ' + selisih + '. Total akan menjadi ' + (totalBobotRounded * 100).toFixed(0) + '%.';
         } else {
             totalBobotInfo.className = 'alert alert-warning';
             totalBobotValue.className = 'badge bg-warning text-dark fs-6';
             const selisih = (1.00 - totalBobotRounded).toFixed(2);
-            totalBobotMessage.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Total bobot kurang dari 1 sebesar ' + selisih + '. Tambahkan ' + (selisih * 100) + '% ke bobot kriteria.';
+            totalBobotMessage.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Total bobot kurang dari 1 sebesar ' + selisih + '. Masih bisa menambah ' + (selisih * 100) + '% lagi.';
         }
     }
     
